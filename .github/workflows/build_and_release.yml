@@ -40,12 +40,9 @@ jobs:
 
   static-build-linux:
     runs-on: ubuntu-latest
-    container: "ghcr.io/abcfy2/musl-cross-toolchain-ubuntu:${{ matrix.cross_host }}"
-    strategy:
-      fail-fast: false
-      matrix:
-        cross_host:
-          - mipsel-unknown-linux-musl
+    env:
+      CROSS_HOST: mipsel-unknown-linux-musl
+      MUSL_CROSS_VERSION: "20250206"
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -53,25 +50,61 @@ jobs:
         id: cache
         with:
           path: downloads/
-          key: build-cache-${{ matrix.cross_host }}-${{ github.sha }}
+          key: build-cache-${{ env.CROSS_HOST }}-${{ github.sha }}
           restore-keys: |
-            build-cache-${{ matrix.cross_host }}-
+            build-cache-${{ env.CROSS_HOST }}-
+      - name: Build GCC 14.2 musl toolchain image
+        env:
+          TOOLCHAIN_IMAGE: custom-musl-toolchain
+        run: |
+          set -euxo pipefail
+          cat <<'EOF' > toolchain.Dockerfile
+          FROM ubuntu:24.04
+          ARG CROSS_HOST
+          ARG MUSL_CROSS_VERSION
+          ENV CROSS_ROOT="/cross_root"
+          ENV CROSS_HOST="${CROSS_HOST}"
+          ENV PATH="${CROSS_ROOT}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+          RUN set -eux; \
+              apt-get update; \
+              apt-get install -y --no-install-recommends ca-certificates curl xz-utils; \
+              curl -fsSL -o "/tmp/${CROSS_HOST}.tar.xz" "https://github.com/cross-tools/musl-cross/releases/download/${MUSL_CROSS_VERSION}/${CROSS_HOST}.tar.xz"; \
+              curl -fsSL -o "/tmp/${CROSS_HOST}.tar.xz.sha256" "https://github.com/cross-tools/musl-cross/releases/download/${MUSL_CROSS_VERSION}/${CROSS_HOST}.tar.xz.sha256"; \
+              cd /tmp; \
+              echo "$(cat ${CROSS_HOST}.tar.xz.sha256)  ${CROSS_HOST}.tar.xz" | sha256sum -c -; \
+              mkdir -p "${CROSS_ROOT}"; \
+              tar -Jxf "/tmp/${CROSS_HOST}.tar.xz" -C "${CROSS_ROOT}" --strip-components=1; \
+              rm -f "/tmp/${CROSS_HOST}.tar.xz" "/tmp/${CROSS_HOST}.tar.xz.sha256"; \
+              apt-get purge -y --auto-remove ca-certificates curl xz-utils; \
+              rm -rf /var/lib/apt/lists/*
+          EOF
+          docker build -f toolchain.Dockerfile \
+            --build-arg CROSS_HOST="${CROSS_HOST}" \
+            --build-arg MUSL_CROSS_VERSION="${MUSL_CROSS_VERSION}" \
+            -t "${TOOLCHAIN_IMAGE}:${CROSS_HOST}-${MUSL_CROSS_VERSION}" .
       - name: compile
         env:
-          CROSS_HOST: "${{ matrix.cross_host }}"
+          CROSS_HOST: "${{ env.CROSS_HOST }}"
+          MUSL_CROSS_VERSION: "${{ env.MUSL_CROSS_VERSION }}"
           USE_LIBRESSL: "1"
         run: |
           if [ "${GITHUB_EVENT_NAME}" = release ]; then
             export ARIA2_VER="${GITHUB_REF#refs/*/}"
             echo "ARIA2_VER=${ARIA2_VER}" >> $GITHUB_ENV
           fi
-          "${GITHUB_WORKSPACE}/build.sh"
+          docker run --rm \
+            -e CROSS_HOST \
+            -e USE_LIBRESSL \
+            -e ARIA2_VER \
+            -v "${GITHUB_WORKSPACE}:/build" \
+            "custom-musl-toolchain:${CROSS_HOST}-${MUSL_CROSS_VERSION}" /build/build.sh
       - name: zip archiving
         env:
-          CROSS_HOST: "${{ matrix.cross_host }}"
+          CROSS_HOST: "${{ env.CROSS_HOST }}"
           USE_LIBRESSL: "1"
         run: |
-          apt install -y zip
+          sudo apt-get update
+          sudo apt-get install -y zip
           if [ x"${USE_LIBRESSL}" = x"1" ]; then
             ARCHIVE_NAME="aria2-${CROSS_HOST//-unknown/}_libressl_static.zip"
           else
@@ -99,4 +132,3 @@ jobs:
           name: aria2 ${{ env.ARIA2_VER }} static release
           body_path: "${{ github.workspace }}/build_info.md"
           append_body: true
-
