@@ -73,6 +73,23 @@ jobs:
             export ARIA2_VER="${GITHUB_REF#refs/*/}"
             echo "ARIA2_VER=${ARIA2_VER}" >> $GITHUB_ENV
           fi
+          if [ "${CROSS_HOST}" = "mipsel-unknown-linux-musl" ]; then
+            echo "Enable full-feature trimming for ${CROSS_HOST}"
+            export USE_LIBRESSL=1
+            export ENABLE_METALINK=0
+            export ENABLE_SQLITE=0
+            export ENABLE_CARES=0
+            export ENABLE_LIBXML2=0
+            export ARIA2_EXTRA_CONFIG="--disable-metalink --disable-xmlrpc-test --without-libcares --without-libxml2 --without-libexpat --without-libsqlite3"
+            {
+              echo "USE_LIBRESSL=1"
+              echo "ENABLE_METALINK=0"
+              echo "ENABLE_SQLITE=0"
+              echo "ENABLE_CARES=0"
+              echo "ENABLE_LIBXML2=0"
+              echo "ARIA2_EXTRA_CONFIG=--disable-metalink --disable-xmlrpc-test --without-libcares --without-libxml2 --without-libexpat --without-libsqlite3"
+            } >> $GITHUB_ENV
+          fi
           "${GITHUB_WORKSPACE}/build.sh"
       - name: zip archiving
         env:
