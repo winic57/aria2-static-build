@@ -14,6 +14,7 @@ set -o pipefail
 : "${ENABLE_LIBSSH2:=1}"
 : "${ENABLE_LIBXML2:=1}"
 : "${ARIA2_EXTRA_CONFIG:=}"
+: "${ENABLE_MINIMAL_BUILD:=0}"
 
 # value from: https://hub.docker.com/repository/docker/abcfy2/musl-cross-toolchain-ubuntu/tags
 # export CROSS_HOST="${CROSS_HOST:-arm-unknown-linux-musleabi}"
@@ -150,10 +151,23 @@ esac
 export PATH="${CROSS_ROOT}/bin:${PATH}"
 export CROSS_PREFIX="${CROSS_ROOT}/${CROSS_HOST}"
 export PKG_CONFIG_PATH="${CROSS_PREFIX}/lib64/pkgconfig:${CROSS_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}"
-OPT_FLAGS="-Os -ffunction-sections -fdata-sections -fno-ident"
+if [[ "${CROSS_HOST}" == mips*linux* ]] || [ x"${ENABLE_MINIMAL_BUILD}" == x1 ]; then
+  # More aggressive size optimization for MIPS and minimal builds
+  OPT_FLAGS="-Os -ffunction-sections -fdata-sections -fno-ident -fomit-frame-pointer -freorder-blocks -finline-functions-called-once -fmerge-constants -fweb -frename-registers"
+  # Additional MIPS-specific flags
+  if [[ "${CROSS_HOST}" == mips*linux* ]]; then
+    OPT_FLAGS="${OPT_FLAGS} -mips32 -march=mips32 -mtune=mips32 -mno-abicalls -mplt -G0"
+  fi
+else
+  OPT_FLAGS="-Os -ffunction-sections -fdata-sections -fno-ident"
+fi
 export LDFLAGS="-L${CROSS_PREFIX}/lib64 -L${CROSS_PREFIX}/lib -s -static --static -Wl,--gc-sections"
 export CFLAGS="-I${CROSS_PREFIX}/include ${OPT_FLAGS}"
-export CXXFLAGS="${CFLAGS}"
+if [[ "${CROSS_HOST}" == mips*linux* ]] || [ x"${ENABLE_MINIMAL_BUILD}" == x1 ]; then
+  export CXXFLAGS="-I${CROSS_PREFIX}/include ${OPT_FLAGS} -fno-exceptions -fno-rtti"
+else
+  export CXXFLAGS="${CFLAGS}"
+fi
 export CC="${CROSS_HOST}-cc"
 export CXX="${CROSS_HOST}-c++"
 export CPP="${CROSS_HOST}-cpp"
@@ -495,6 +509,17 @@ build_aria2() {
     "--enable-silent-rules"
     "ARIA2_STATIC=yes"
   )
+  
+  # For minimal builds, disable most features to reduce memory footprint
+  if [ x"${ENABLE_MINIMAL_BUILD}" == x1 ]; then
+    echo "Building minimal aria2 configuration for constrained environments..."
+    ENABLE_METALINK=0
+    ENABLE_SQLITE=0
+    ENABLE_LIBSSH2=0
+    ENABLE_LIBXML2=0
+    configure_args+=("--disable-metalink" "--without-libxml2" "--without-libexpat" "--without-libsqlite3" "--without-libcares")
+  fi
+  
   if [ "${ENABLE_METALINK}" != "1" ]; then
     configure_args+=("--disable-metalink")
   fi
@@ -531,6 +556,20 @@ get_build_info() {
   echo '```' >>"${BUILD_INFO}"
 }
 
+get_release() {
+  echo "============= ARIA2 RELEASE INFO ==============="
+  echo "Build completed successfully!"
+  echo "Binary: aria2c"
+  echo "Target: ${CROSS_HOST}"
+  echo "Minimal Build: ${ENABLE_MINIMAL_BUILD:-0}"
+  if [ x"${ENABLE_MINIMAL_BUILD}" == x1 ]; then
+    echo "Features: HTTP/HTTPS only (Metalink, SQLite, libssh2, libxml2, c-ares disabled)"
+  else
+    echo "Features: Full feature set enabled"
+  fi
+  echo "=============================================="
+}
+
 test_build() {
   # get release
   cp -fv "${CROSS_PREFIX}/bin/"aria2* "${SELF_DIR}"
@@ -545,21 +584,23 @@ prepare_zlib
 prepare_xz
 prepare_ssl
 prepare_libiconv
-if [ "${ENABLE_LIBXML2}" = "1" ]; then
+if [ "${ENABLE_LIBXML2}" = "1" ] && [ x"${ENABLE_MINIMAL_BUILD}" != x1 ]; then
   prepare_libxml2
 fi
-if [ "${ENABLE_SQLITE}" = "1" ]; then
+if [ "${ENABLE_SQLITE}" = "1" ] && [ x"${ENABLE_MINIMAL_BUILD}" != x1 ]; then
   prepare_sqlite
 fi
-if [ "${ENABLE_CARES}" = "1" ]; then
+if [ "${ENABLE_CARES}" = "1" ] && [ x"${ENABLE_MINIMAL_BUILD}" != x1 ]; then
   prepare_c_ares
 fi
-if [ "${ENABLE_LIBSSH2}" = "1" ]; then
+if [ "${ENABLE_LIBSSH2}" = "1" ] && [ x"${ENABLE_MINIMAL_BUILD}" != x1 ]; then
   prepare_libssh2
 fi
 build_aria2
 
 get_build_info
+get_release
+
 # mips test will hang, I don't know why. So I just ignore test failures.
 case "${CROSS_HOST}" in
 mips-*linux* | mips64-*linux*)
@@ -568,6 +609,7 @@ mips-*linux* | mips64-*linux*)
 *)
   test_build
   ;;
+
 esac
 
 # get release
