@@ -6,6 +6,7 @@
 # Artifacts will copy to the same directory.
 
 set -o pipefail
+: "${USE_LIBRESSL:=1}"
 
 : "${ENABLE_METALINK:=1}"
 : "${ENABLE_SQLITE:=1}"
@@ -149,8 +150,10 @@ esac
 export PATH="${CROSS_ROOT}/bin:${PATH}"
 export CROSS_PREFIX="${CROSS_ROOT}/${CROSS_HOST}"
 export PKG_CONFIG_PATH="${CROSS_PREFIX}/lib64/pkgconfig:${CROSS_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}"
-export LDFLAGS="-L${CROSS_PREFIX}/lib64 -L${CROSS_PREFIX}/lib -s -static --static"
-export CFLAGS="-I${CROSS_PREFIX}/include"
+OPT_FLAGS="-Os -ffunction-sections -fdata-sections -fno-ident"
+export LDFLAGS="-L${CROSS_PREFIX}/lib64 -L${CROSS_PREFIX}/lib -s -static --static -Wl,--gc-sections"
+export CFLAGS="-I${CROSS_PREFIX}/include ${OPT_FLAGS}"
+export CXXFLAGS="${CFLAGS}"
 export CC="${CROSS_HOST}-cc"
 export CXX="${CROSS_HOST}-c++"
 export CPP="${CROSS_HOST}-cpp"
