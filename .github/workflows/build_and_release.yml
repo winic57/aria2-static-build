@@ -12,6 +12,16 @@ on:
       - released
   schedule:
     - cron: "0 0 * * 6"
+  workflow_dispatch:
+    inputs:
+      cross_host:
+        description: 'Cross compilation target (e.g., mipsel-unknown-linux-musl)'
+        required: false
+        default: 'mipsel-unknown-linux-musl'
+      musl_cross_version:
+        description: 'MUSL cross toolchain version'
+        required: false
+        default: '20250206'
 
 jobs:
   create-prerelease:
@@ -41,11 +51,44 @@ jobs:
   static-build-linux:
     runs-on: ubuntu-latest
     env:
-      CROSS_HOST: mipsel-unknown-linux-musl
-      MUSL_CROSS_VERSION: "20250206"
+      CROSS_HOST: ${{ github.event.inputs.cross_host || 'mipsel-unknown-linux-musl' }}
+      MUSL_CROSS_VERSION: ${{ github.event.inputs.musl_cross_version || '20250206' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+      - name: Configure Docker daemon with mirror acceleration
+        run: |
+          set -euxo pipefail
+          # Configure Docker daemon with mirror sources to handle Docker Hub 500 errors
+          sudo mkdir -p /etc/docker
+          sudo tee /etc/docker/daemon.json > /dev/null <<EOF
+          {
+            "registry-mirrors": [
+              "https://docker.m.daocloud.io",
+              "https://docker.1panel.live",
+              "https://dockerhub.icu",
+              "https://docker.nastool.de"
+            ],
+            "max-concurrent-downloads": 10,
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "20m",
+              "max-file": "3"
+            }
+          }
+          EOF
+          sudo systemctl daemon-reload || true
+          sudo systemctl restart docker || true
+          # Wait for Docker to be ready
+          for i in {1..30}; do
+            if docker info &> /dev/null; then
+              echo "Docker is ready"
+              break
+            fi
+            echo "Waiting for Docker to start... ($i/30)"
+            sleep 2
+          done
+          docker info
       - uses: actions/cache@v4
         id: cache
         with:
@@ -78,10 +121,34 @@ jobs:
               apt-get purge -y --auto-remove ca-certificates curl xz-utils; \
               rm -rf /var/lib/apt/lists/*
           EOF
-          docker build -f toolchain.Dockerfile \
-            --build-arg CROSS_HOST="${CROSS_HOST}" \
-            --build-arg MUSL_CROSS_VERSION="${MUSL_CROSS_VERSION}" \
-            -t "${TOOLCHAIN_IMAGE}:${CROSS_HOST}-${MUSL_CROSS_VERSION}" .
+          
+          # Retry mechanism for Docker build to handle transient failures
+          retry_count=0
+          max_retries=3
+          retry_delay=10
+          
+          while [ $retry_count -lt $max_retries ]; do
+            echo "Building Docker image (attempt $((retry_count + 1))/$max_retries)..."
+            if docker build -f toolchain.Dockerfile \
+              --build-arg CROSS_HOST="${CROSS_HOST}" \
+              --build-arg MUSL_CROSS_VERSION="${MUSL_CROSS_VERSION}" \
+              -t "${TOOLCHAIN_IMAGE}:${CROSS_HOST}-${MUSL_CROSS_VERSION}" .; then
+              echo "Docker build succeeded!"
+              break
+            else
+              retry_count=$((retry_count + 1))
+              if [ $retry_count -lt $max_retries ]; then
+                echo "Docker build failed, retrying in ${retry_delay}s..."
+                sleep $retry_delay
+              else
+                echo "Docker build failed after $max_retries attempts"
+                exit 1
+              fi
+            fi
+          done
+          
+          # Verify image was created
+          docker images "${TOOLCHAIN_IMAGE}:${CROSS_HOST}-${MUSL_CROSS_VERSION}"
       - name: compile
         env:
           CROSS_HOST: "${{ env.CROSS_HOST }}"
