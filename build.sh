@@ -14,6 +14,7 @@ set -o pipefail
 : "${ENABLE_LIBSSH2:=1}"
 : "${ENABLE_LIBXML2:=1}"
 : "${ARIA2_EXTRA_CONFIG:=}"
+: "${ENABLE_MINIMAL_BUILD:=0}"
 
 # value from: https://hub.docker.com/repository/docker/abcfy2/musl-cross-toolchain-ubuntu/tags
 # export CROSS_HOST="${CROSS_HOST:-arm-unknown-linux-musleabi}"
@@ -150,10 +151,23 @@ esac
 export PATH="${CROSS_ROOT}/bin:${PATH}"
 export CROSS_PREFIX="${CROSS_ROOT}/${CROSS_HOST}"
 export PKG_CONFIG_PATH="${CROSS_PREFIX}/lib64/pkgconfig:${CROSS_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}"
-OPT_FLAGS="-Os -ffunction-sections -fdata-sections -fno-ident"
+if [[ "${CROSS_HOST}" == mips*linux* ]] || [ x"${ENABLE_MINIMAL_BUILD}" == x1 ]; then
+  # More aggressive size optimization for MIPS and minimal builds
+  OPT_FLAGS="-Os -ffunction-sections -fdata-sections -fno-ident -fomit-frame-pointer -freorder-blocks -finline-functions-called-once -fmerge-constants -fweb -frename-registers"
+  # Additional MIPS-specific flags
+  if [[ "${CROSS_HOST}" == mips*linux* ]]; then
+    OPT_FLAGS="${OPT_FLAGS} -mips32 -march=mips32 -mtune=mips32 -mno-abicalls -mplt -G0"
+  fi
+else
+  OPT_FLAGS="-Os -ffunction-sections -fdata-sections -fno-ident"
+fi
 export LDFLAGS="-L${CROSS_PREFIX}/lib64 -L${CROSS_PREFIX}/lib -s -static --static -Wl,--gc-sections"
 export CFLAGS="-I${CROSS_PREFIX}/include ${OPT_FLAGS}"
-export CXXFLAGS="${CFLAGS}"
+if [[ "${CROSS_HOST}" == mips*linux* ]] || [ x"${ENABLE_MINIMAL_BUILD}" == x1 ]; then
+  export CXXFLAGS="-I${CROSS_PREFIX}/include ${OPT_FLAGS} -fno-exceptions -fno-rtti"
+else
+  export CXXFLAGS="${CFLAGS}"
+fi
 export CC="${CROSS_HOST}-cc"
 export CXX="${CROSS_HOST}-c++"
 export CPP="${CROSS_HOST}-cpp"
