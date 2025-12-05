@@ -164,8 +164,18 @@ jobs:
             -e CROSS_HOST \
             -e USE_LIBRESSL \
             -e ARIA2_VER \
+            -e ENABLE_MINIMAL_BUILD \
             -v "${GITHUB_WORKSPACE}:/build" \
-            "custom-musl-toolchain:${CROSS_HOST}-${MUSL_CROSS_VERSION}" /build/build.sh
+            "custom-musl-toolchain:${CROSS_HOST}-${MUSL_CROSS_VERSION}" /build/build.sh && \
+          if [ "${{ env.CROSS_HOST }}" != "mipsel-unknown-linux-musl" ]; then \
+            docker run --rm \
+              -e CROSS_HOST="${{ env.CROSS_HOST }}" \
+              -e USE_LIBRESSL=1 \
+              -e ENABLE_MINIMAL_BUILD=1 \
+              -e ARIA2_VER="${{ env.ARIA2_VER }}" \
+              -v "${GITHUB_WORKSPACE}:/build" \
+              "custom-musl-toolchain:${{ env.CROSS_HOST }}-${{ env.MUSL_CROSS_VERSION }}" /build/build.sh; \
+          fi
       - name: zip archiving
         env:
           CROSS_HOST: "${{ env.CROSS_HOST }}"

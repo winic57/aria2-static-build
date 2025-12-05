@@ -556,6 +556,20 @@ get_build_info() {
   echo '```' >>"${BUILD_INFO}"
 }
 
+get_release() {
+  echo "============= ARIA2 RELEASE INFO ==============="
+  echo "Build completed successfully!"
+  echo "Binary: aria2c"
+  echo "Target: ${CROSS_HOST}"
+  echo "Minimal Build: ${ENABLE_MINIMAL_BUILD:-0}"
+  if [ x"${ENABLE_MINIMAL_BUILD}" == x1 ]; then
+    echo "Features: HTTP/HTTPS only (Metalink, SQLite, libssh2, libxml2, c-ares disabled)"
+  else
+    echo "Features: Full feature set enabled"
+  fi
+  echo "=============================================="
+}
+
 test_build() {
   # get release
   cp -fv "${CROSS_PREFIX}/bin/"aria2* "${SELF_DIR}"
@@ -585,6 +599,8 @@ fi
 build_aria2
 
 get_build_info
+get_release
+
 # mips test will hang, I don't know why. So I just ignore test failures.
 case "${CROSS_HOST}" in
 mips-*linux* | mips64-*linux*)
@@ -593,6 +609,7 @@ mips-*linux* | mips64-*linux*)
 *)
   test_build
   ;;
+
 esac
 
 # get release
