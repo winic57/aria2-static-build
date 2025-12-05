@@ -55,6 +55,21 @@ This will:
 - Disable optional features (Metalink, SQLite, libssh2, libxml2, c-ares)
 - Reduce memory footprint significantly
 
+**中文说明:**
+如果您在OpenWrt或其他MIPS架构的嵌入式设备上运行aria2c时遇到"Killed"错误，这通常是由于二进制文件大小和内存使用量过大导致的OOM（内存不足）杀手终止进程。
+
+构建过程会自动为MIPS目标应用优化，但您也可以手动构建最小化版本：
+
+```sh
+docker run --rm -v `pwd`:/build -e ENABLE_MINIMAL_BUILD=1 abcfy2/musl-cross-toolchain-ubuntu:mipsel-unknown-linux-musl /build/build.sh
+```
+
+这将：
+- 使用激进的代码大小优化标志
+- 应用MIPS特定的编译器优化
+- 禁用可选功能（Metalink、SQLite、libssh2、libxml2、c-ares）
+- 显著减少内存占用
+
 ## Fedora users NOTE
 
 Fedora's openssl may contains some non-official patches and contains some configurations not support by this build openssl.
@@ -110,4 +125,12 @@ Optional environment variables:
 - `USE_CHINA_MIRROR`: set to `1` will use China mirrors, if you were located in China, please set to `1`. Default: `0`.
 - `USE_ZLIB_NG`: use [zlib-ng](https://github.com/zlib-ng/zlib-ng) instead of [zlib](https://zlib.net/). Default: `1`
 - `USE_LIBRESSL`: use [LibreSSL](https://www.libressl.org/) instead of [OpenSSL](https://www.openssl.org/). Default: `0`. **_NOTE_**, if `CROSS_HOST=x86_64-w64-mingw32` will not use openssl or libressl because aria2 and all dependencies will use WinTLS instead.
-- `ENABLE_MINIMAL_BUILD`: build a minimal version of aria2 with reduced memory footprint for constrained environments (e.g., embedded devices, OpenWrt). This disables Metalink, SQLite, libssh2, libxml2, and c-ares support. Default: `0`. Automatically enabled for MIPS targets in CI builds.
+- `ENABLE_MINIMAL_BUILD`: 构建内存占用更小的最小化aria2版本，适用于资源受限的环境（如嵌入式设备、OpenWrt）。这将禁用Metalink、SQLite、libssh2、libxml2和c-ares支持。默认：`0`。在CI构建中自动为MIPS目标启用。
+
+**环境变量中文说明:**
+
+- `ARIA2_VER`: 构建特定版本的aria2，例如：`1.36.0`。默认：`master`。
+- `USE_CHINA_MIRROR`: 设置为`1`将使用中国镜像，如果您位于中国，请设置为`1`。默认：`0`。
+- `USE_ZLIB_NG`: 使用[zlib-ng](https://github.com/zlib-ng/zlib-ng)而不是[zlib](https://zlib.net/)。默认：`1`。
+- `USE_LIBRESSL`: 使用[LibreSSL](https://www.libressl.org/)而不是[OpenSSL](https://www.openssl.org/)。默认：`0`。**注意**，如果`CROSS_HOST=x86_64-w64-mingw32`将不使用openssl或libressl，因为aria2和所有依赖项将使用WinTLS。
+- `ENABLE_MINIMAL_BUILD`: 构建内存占用更小的最小化aria2版本，适用于资源受限的环境（如嵌入式设备、OpenWrt）。这将禁用Metalink、SQLite、libssh2、libxml2和c-ares支持。默认：`0`。在CI构建中自动为MIPS目标启用。

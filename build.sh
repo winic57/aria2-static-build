@@ -570,16 +570,16 @@ prepare_zlib
 prepare_xz
 prepare_ssl
 prepare_libiconv
-if [ "${ENABLE_LIBXML2}" = "1" ]; then
+if [ "${ENABLE_LIBXML2}" = "1" ] && [ x"${ENABLE_MINIMAL_BUILD}" != x1 ]; then
   prepare_libxml2
 fi
-if [ "${ENABLE_SQLITE}" = "1" ]; then
+if [ "${ENABLE_SQLITE}" = "1" ] && [ x"${ENABLE_MINIMAL_BUILD}" != x1 ]; then
   prepare_sqlite
 fi
-if [ "${ENABLE_CARES}" = "1" ]; then
+if [ "${ENABLE_CARES}" = "1" ] && [ x"${ENABLE_MINIMAL_BUILD}" != x1 ]; then
   prepare_c_ares
 fi
-if [ "${ENABLE_LIBSSH2}" = "1" ]; then
+if [ "${ENABLE_LIBSSH2}" = "1" ] && [ x"${ENABLE_MINIMAL_BUILD}" != x1 ]; then
   prepare_libssh2
 fi
 build_aria2
