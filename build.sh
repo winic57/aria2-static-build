@@ -7,6 +7,13 @@
 
 set -o pipefail
 
+: "${ENABLE_METALINK:=1}"
+: "${ENABLE_SQLITE:=1}"
+: "${ENABLE_CARES:=1}"
+: "${ENABLE_LIBSSH2:=1}"
+: "${ENABLE_LIBXML2:=1}"
+: "${ARIA2_EXTRA_CONFIG:=}"
+
 # value from: https://hub.docker.com/repository/docker/abcfy2/musl-cross-toolchain-ubuntu/tags
 # export CROSS_HOST="${CROSS_HOST:-arm-unknown-linux-musleabi}"
 # value from openssl source: ./Configure LIST
@@ -476,7 +483,33 @@ build_aria2() {
   if [ ! -f ./configure ]; then
     autoreconf -i
   fi
-  ./configure --host="${CROSS_HOST}" --prefix="${CROSS_PREFIX}" --enable-static --disable-shared --enable-silent-rules ARIA2_STATIC=yes
+  local -a configure_args extra_args
+  configure_args=(
+    "--host=${CROSS_HOST}"
+    "--prefix=${CROSS_PREFIX}"
+    "--enable-static"
+    "--disable-shared"
+    "--enable-silent-rules"
+    "ARIA2_STATIC=yes"
+  )
+  if [ "${ENABLE_METALINK}" != "1" ]; then
+    configure_args+=("--disable-metalink")
+  fi
+  if [ "${ENABLE_CARES}" != "1" ]; then
+    configure_args+=("--without-libcares")
+  fi
+  if [ "${ENABLE_LIBXML2}" != "1" ]; then
+    configure_args+=("--without-libxml2" "--without-libexpat")
+  fi
+  if [ "${ENABLE_SQLITE}" != "1" ]; then
+    configure_args+=("--without-libsqlite3")
+  fi
+  if [ -n "${ARIA2_EXTRA_CONFIG}" ]; then
+    # shellcheck disable=SC2206 # allow word splitting for custom arguments
+    extra_args=(${ARIA2_EXTRA_CONFIG})
+    configure_args+=("${extra_args[@]}")
+  fi
+  ./configure "${configure_args[@]}"
   make -j$(nproc)
   make install
   echo "- aria2: source: ${aria2_latest_url:-cached aria2}" >>"${BUILD_INFO}"
@@ -509,10 +542,18 @@ prepare_zlib
 prepare_xz
 prepare_ssl
 prepare_libiconv
-prepare_libxml2
-prepare_sqlite
-prepare_c_ares
-prepare_libssh2
+if [ "${ENABLE_LIBXML2}" = "1" ]; then
+  prepare_libxml2
+fi
+if [ "${ENABLE_SQLITE}" = "1" ]; then
+  prepare_sqlite
+fi
+if [ "${ENABLE_CARES}" = "1" ]; then
+  prepare_c_ares
+fi
+if [ "${ENABLE_LIBSSH2}" = "1" ]; then
+  prepare_libssh2
+fi
 build_aria2
 
 get_build_info
