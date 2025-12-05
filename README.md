@@ -39,6 +39,22 @@ If your environment does not contain any of these files, you must do one of the 
 
 > Reference for different distribution certificates locations: https://gitlab.com/probono/platformissues/blob/master/README.md#certificates
 
+## OpenWrt/MIPS users NOTE
+
+If you encounter "Killed" errors when running aria2c on OpenWrt or other MIPS-based embedded devices, this is typically caused by the OOM (Out Of Memory) killer due to the binary size and memory usage.
+
+The build automatically applies optimizations for MIPS targets, but you can also manually build a minimal version:
+
+```sh
+docker run --rm -v `pwd`:/build -e ENABLE_MINIMAL_BUILD=1 abcfy2/musl-cross-toolchain-ubuntu:mipsel-unknown-linux-musl /build/build.sh
+```
+
+This will:
+- Use aggressive size optimization flags
+- Apply MIPS-specific compiler optimizations
+- Disable optional features (Metalink, SQLite, libssh2, libxml2, c-ares)
+- Reduce memory footprint significantly
+
 ## Fedora users NOTE
 
 Fedora's openssl may contains some non-official patches and contains some configurations not support by this build openssl.
@@ -94,3 +110,4 @@ Optional environment variables:
 - `USE_CHINA_MIRROR`: set to `1` will use China mirrors, if you were located in China, please set to `1`. Default: `0`.
 - `USE_ZLIB_NG`: use [zlib-ng](https://github.com/zlib-ng/zlib-ng) instead of [zlib](https://zlib.net/). Default: `1`
 - `USE_LIBRESSL`: use [LibreSSL](https://www.libressl.org/) instead of [OpenSSL](https://www.openssl.org/). Default: `0`. **_NOTE_**, if `CROSS_HOST=x86_64-w64-mingw32` will not use openssl or libressl because aria2 and all dependencies will use WinTLS instead.
+- `ENABLE_MINIMAL_BUILD`: build a minimal version of aria2 with reduced memory footprint for constrained environments (e.g., embedded devices, OpenWrt). This disables Metalink, SQLite, libssh2, libxml2, and c-ares support. Default: `0`. Automatically enabled for MIPS targets in CI builds.

@@ -509,6 +509,17 @@ build_aria2() {
     "--enable-silent-rules"
     "ARIA2_STATIC=yes"
   )
+  
+  # For minimal builds, disable most features to reduce memory footprint
+  if [ x"${ENABLE_MINIMAL_BUILD}" == x1 ]; then
+    echo "Building minimal aria2 configuration for constrained environments..."
+    ENABLE_METALINK=0
+    ENABLE_SQLITE=0
+    ENABLE_LIBSSH2=0
+    ENABLE_LIBXML2=0
+    configure_args+=("--disable-metalink" "--without-libxml2" "--without-libexpat" "--without-libsqlite3" "--without-libcares")
+  fi
+  
   if [ "${ENABLE_METALINK}" != "1" ]; then
     configure_args+=("--disable-metalink")
   fi

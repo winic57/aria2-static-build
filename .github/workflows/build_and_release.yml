@@ -154,6 +154,7 @@ jobs:
           CROSS_HOST: "${{ env.CROSS_HOST }}"
           MUSL_CROSS_VERSION: "${{ env.MUSL_CROSS_VERSION }}"
           USE_LIBRESSL: "1"
+          ENABLE_MINIMAL_BUILD: ${{ contains(env.CROSS_HOST, 'mips') && '1' || '0' }}
         run: |
           if [ "${GITHUB_EVENT_NAME}" = release ]; then
             export ARIA2_VER="${GITHUB_REF#refs/*/}"
